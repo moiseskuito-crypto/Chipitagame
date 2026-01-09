@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chipita Game - Jogo Lúdico Infantil</title>
+<style>
+body{margin:0;font-family:Arial;text-align:center;background:linear-gradient(135deg,#ffecd2,#fcb69f);}
+header{background:#ff7043;color:#fff;padding:10px;font-size:16px;display:flex;justify-content:space-around;align-items:center;flex-wrap:wrap;}
+button{padding:12px 18px;margin:6px;border:none;border-radius:16px;font-size:16px;cursor:pointer;transition:0.3s;}
+button.option{background:#2196F3;color:#fff;}
+button:hover{transform:scale(1.05);}
+.hidden{display:none;}
+#grid{display:grid;gap:10px;margin:15px auto;transition:all 0.5s;grid-template-columns: repeat(auto-fit, minmax(70px,1fr));}
+.card{background:#fff;border-radius:16px;height:85px;display:flex;justify-content:center;align-items:center;font-size:28px;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,.3);transition:0.3s;}
+.card.matched{background:#81c784;color:#fff;transform:scale(1.1);}
+.correct{background:#81c784;color:#fff;transform:scale(1.1);}
+.wrong{background:#e57373;color:#fff;}
+#message,#message4{font-size:20px;margin:10px;color:#ff4500;font-weight:bold;}
+.back-btn{background:#ff7043;color:#fff;padding:8px 12px;margin:10px;border-radius:12px;}
+#confetti-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;}
+.confetti{position:absolute;width:10px;height:10px;opacity:0.7;animation:fall 2s linear forwards;}
+@keyframes fall{0%{transform:translateY(0) rotate(0deg);}100%{transform:translateY(100vh) rotate(360deg);}}
+#avatar{font-size:50px;margin:10px;transition:transform 0.3s;}
+.reward{position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);font-size:60px;opacity:0;transition:opacity 0.8s;}
+#instructions{background:#fff;padding:20px;margin:20px;border-radius:16px;box-shadow:0 4px 6px rgba(0,0,0,.3);}
+</style>
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff7043">
+</head>
+<body>
+
+<header>
+  <span style="font-weight:bold;font-size:20px;color:#fff;">🎮 Chipita Game</span>
+  ⭐ <span id="best">0</span> | 🎯 <span id="score">0</span> | ⏱ <span id="timer">60</span>s | 📘 <span id="level">1</span>
+  <button onclick="toggleMusic()">🎵</button>
+</header>
+
+<div id="menu">
+  <h1>🛡️ Chipita Game</h1>
+  <p style="font-size:14px;color:#555;">Aprender e se divertir com segurança!</p>
+  <h2>🎮 Jogo Lúdico Infantil</h2>
+  <button onclick="startModule('alfabeto')">🔤 Alfabeto</button>
+  <button onclick="startModule('frutas')">🍎 Frutas</button>
+  <button onclick="startModule('legumes')">🥕 Legumes</button>
+  <button onclick="startModule('humano')">🧍 Corpo Humano</button>
+  <button onclick="toggleLang()">🌍 Idioma</button>
+</div>
+
+<div id="instructions" class="hidden">
+  <h3>Como jogar:</h3>
+  <p>Clique nas cartas para encontrar pares iguais.<br>
+     Acertos dão pontos, erros reduzem pontos.<br>
+     Tente completar o nível antes do tempo acabar!</p>
+  <p style="margin-top:20px;font-size:12px;color:#888;">© 2026 Chipita Game</p>
+  <button onclick="startLevelFromInstructions()">Começar</button>
+</div>
+
+<div id="game" class="hidden">
+  <button class="back-btn" onclick="exitModule()">⬅ Voltar</button>
+  <div id="grid"></div>
+  <div id="message"></div>
+  <div class="reward" id="reward">⭐</div>
+</div>
+
+<audio id="bgm" loop src=""></audio>
+<audio id="clickSound" src=""></audio>
+<audio id="successSound" src=""></audio>
+<audio id="errorSound" src=""></audio>
+<div id="confetti-container"></div>
+
+<script>
+// ===================== CONFIGURAÇÃO =====================
+let lang = localStorage.lang || "pt";
+let musicOn = true;
+let score = 0, level = 1, time = 60;
+let timer, module, streak = 0, busy = false;
+let best = localStorage.best || 0;
+document.getElementById("best").textContent = best;
+const avatar = document.getElementById("avatar");
+const rewardDiv = document.getElementById("reward");
+const bgm = document.getElementById("bgm");
+const clickSound = document.getElementById("clickSound");
+const successSound = document.getElementById("successSound");
+const errorSound = document.getElementById("errorSound");
+
+// ===================== DADOS =====================
+const data={
+ pt:{
+  alfabeto:["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"],
+  frutas:["🍎","🍌","🍇","🍓","🍍","🍉","🍒","🥭","🍑","🍐","🍊","🍋","🥝","🥥","🍈","🍏"],
+  legumes:["🥕","🥦","🌽","🥔","🍆","🥬","🧄","🧅","🫑","🫛","🍠","🍄","🌶️","🥒","🥜","🫘"],
+  humano:["👁️","👂","👃","👄","🦵","🦶","🖐️","🦴","🧠","🫀"]
+ },
+ en:{
+  alfabeto:["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P"],
+  frutas:["🍎","🍌","🍇","🍓","🍍","🍉","🍒","🥭","🍑","🍐","🍊","🍋","🥝","🥥","🍈","🍏"],
+  legumes:["🥕","🥦","🌽","🥔","🍆","🥬","🧄","🧅","🫑","🫛","🍠","🍄","🌶️","🥒","🥜","🫘"],
+  humano:["👁️","👂","👃","👄","🦵","🦶","🖐️","🦴","🧠","🫀"]
+ }
+};
+const moduleOrder=["alfabeto","frutas","legumes","humano"];
+let unlockedModules=["alfabeto"]; 
+
+// Carregar módulos desbloqueados
+let savedModules = JSON.parse(localStorage.getItem("unlockedModules"));
+if(savedModules) unlockedModules = savedModules;
+
+// ===================== FUNÇÕES =====================
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function speak(t){if("speechSynthesis"in window){let u=new SpeechSynthesisUtterance(t);u.lang=lang=="pt"?"pt-PT":"en-US";speechSynthesis.cancel();speechSynthesis.speak(u);}}
+function toggleLang(){lang=lang=="pt"?"en":"pt";localStorage.lang=lang;alert(lang=="pt"?"Português":"English");}
+function toggleMusic(){musicOn=!musicOn;bgm[musicOn?"play":"pause"]();alert(musicOn?"🎵 Música ON":"🔇 Música OFF");}
+function launchConfetti(){const container=document.getElementById("confetti-container");for(let i=0;i<50;i++){const confetti=document.createElement("div");confetti.className="confetti";confetti.style.left=Math.random()*100+"%";confetti.style.backgroundColor=`hsl(${Math.random()*360},100%,50%)`;container.appendChild(confetti);setTimeout(()=>confetti.remove(),2000);}}
+
+// ===================== JOGO =====================
+let cards=[], flipped=[];
+function startModule(m){
+ if(!unlockedModules.includes(m)){alert("Complete o módulo anterior primeiro!");return;}
+ module = m; level = 1; score = 0; streak = 0;
+ document.getElementById("menu").classList.add("hidden");
+ document.getElementById("instructions").classList.remove("hidden");
+}
+
+function startLevelFromInstructions(){
+ document.getElementById("instructions").classList.add("hidden");
+ document.getElementById("game").classList.remove("hidden");
+ startLevel();
+ bgm.src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+ if(musicOn) bgm.play();
+}
+
+function startLevel(){
+ clearInterval(timer);
+ streak = 0;
+
+ if(level <= 2) time = 60;         
+ else if(level <= 4) time = 45;    
+ else time = 30;                    
+
+ document.getElementById("level").textContent = level;
+ document.getElementById("score").textContent = score;
+ document.getElementById("timer").textContent = time;
+
+ timer = setInterval(()=>{
+  time--; 
+  document.getElementById("timer").textContent = time;
+  if(time <= 0){ clearInterval(timer); alert("⏰ Tempo esgotado! Reiniciando nível."); startLevel(); }
+ },1000);
+
+ const theme = shuffle([...data[lang][module]]);
+ let pairCount;
+ if(level <= 2) pairCount = Math.min(8, theme.length);
+ else if(level <= 4) pairCount = Math.min(16, theme.length);
+ else pairCount = Math.min(20, theme.length);
+
+ cards = shuffle([...theme.slice(0,pairCount), ...theme.slice(0,pairCount)]);
+ const grid = document.getElementById("grid");
+ grid.innerHTML="";
+ cards.forEach(symbol=>{
+  const card = document.createElement("div");
+  card.className="card";
+  card.dataset.symbol = symbol;
+  card.addEventListener("click",()=>flipCard(card));
+  grid.appendChild(card);
+ });
+ flipped=[];
+ document.getElementById("message").textContent="";
+}
+
+function flipCard(card){
+ if(busy) return;
+ if(flipped.length<2 && !card.classList.contains('matched')){
+  card.innerHTML = card.dataset.symbol;
+  clickSound.src="https://freesound.org/data/previews/341/341695_5260872-lq.mp3";
+  clickSound.play();
+  flipped.push(card);
+  speak(card.dataset.symbol);
+  if(flipped.length===2){
+    busy = true;
+    setTimeout(checkMatch,500);
+  }
+ }
+}
+
+function checkMatch(){
+ const [a,b] = flipped;
+ if(a.dataset.symbol === b.dataset.symbol){
+  a.classList.add('matched','correct'); b.classList.add('matched','correct');
+  score += 10; streak++;
+  if(streak>=3){launchConfetti(); showReward();}
+  successSound.src="https://freesound.org/data/previews/331/331912_3248244-lq.mp3";
+  successSound.play();
+  setTimeout(()=>{a.classList.remove('correct'); b.classList.remove('correct');},500);
+ } else {
+  a.classList.add('wrong'); b.classList.add('wrong');
+  score -= 5; streak=0;
+  errorSound.src="https://freesound.org/data/previews/331/331912_3248244-lq.mp3";
+  errorSound.play();
+  setTimeout(()=>{a.innerHTML=""; b.innerHTML=""; a.classList.remove('wrong'); b.classList.remove('wrong');},400);
+ }
+ flipped=[];
+ document.getElementById("score").textContent = score;
+ busy=false;
+ saveProgress();
+ if(document.querySelectorAll(".card:not(.matched)").length===0){
+  level++; level>5?nextModule():startLevel();
+ }
+}
+
+function showReward(){
+  rewardDiv.innerHTML = "⭐ Chipita Game";
+  rewardDiv.style.opacity = 1;
+  setTimeout(()=>{rewardDiv.style.opacity=0; rewardDiv.innerHTML="⭐";},1200);
+}
+
+function exitModule(){clearInterval(timer);bgm.pause();document.getElementById("game").classList.add("hidden");document.getElementById("menu").classList.remove("hidden");}
+
+function nextModule(){
+ const nextIndex = moduleOrder.indexOf(module)+1;
+ if(nextIndex < moduleOrder.length){
+  unlockedModules.push(moduleOrder[nextIndex]);
+  alert("🎉 Módulo concluído! Próximo módulo desbloqueado.");
+  saveProgress();
+ }
+ exitModule();
+}
+
+// ===================== SALVAR PROGRESSO =====================
+function saveProgress(){
+ if(score > best){
+  best = score;
+  localStorage.best = best;
+  document.getElementById("best").textContent = best;
+ }
+ localStorage.setItem("unlockedModules", JSON.stringify(unlockedModules));
+}
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js')
+    .then(()=>console.log("Service Worker registrado"))
+    .catch(()=>console.log("Falha no Service Worker"));
+}
+</script>
+</body>
+</html>
